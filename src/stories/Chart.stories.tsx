@@ -17,6 +17,8 @@ export const Simple: Story = {
             },
         },
 
+        disableWorker: false,
+
         style: {
             outline: "1px solid #ccc",
         },
