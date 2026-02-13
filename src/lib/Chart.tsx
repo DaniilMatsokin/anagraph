@@ -83,6 +83,8 @@ interface ChartProps {
     onTouchUp?: (x: number, event: PointerEvent) => void;
     onChangeBoundsEnd?: (bounds: Bounds) => void;
     onChangeBounds?: (bounds: Bounds) => void;
+
+    disableWorker?: boolean;
 }
 
 function arrayMergeOverwrite<T>(_: T[], sourceArray: T[]): T[] {
@@ -97,7 +99,6 @@ interface CanvasWorkerSubset {
 }
 
 function createFallbackPseudoWorker(): CanvasWorkerSubset {
-    console.log("Anagraph: Warning: OffscreenCanvas is not supported, using single-threaded drawing code");
     const handler = createCanvasHandler((msg) => global.postMessage(msg));
     handler.startSendingFps();
     return {
@@ -111,16 +112,20 @@ function createFallbackPseudoWorker(): CanvasWorkerSubset {
         },
     };
 }
-function useWorker(): CanvasWorkerSubset {
+function useWorker(disableWorker: boolean): CanvasWorkerSubset {
     const hasOffscreenSupport = HTMLCanvasElement.prototype.transferControlToOffscreen !== undefined;
     const workerCreator = useWorkerCreator();
     const worker = useMemo((): CanvasWorkerSubset => {
-        if (hasOffscreenSupport) {
-            return workerCreator();
-        } else {
+        if (!hasOffscreenSupport) {
+            console.log("Anagraph: Warning: OffscreenCanvas is not supported, using single-threaded drawing code");
+        }
+
+        if (!hasOffscreenSupport || disableWorker) {
             return createFallbackPseudoWorker();
         }
-    }, [hasOffscreenSupport]);
+
+        return workerCreator();
+    }, [hasOffscreenSupport, disableWorker]);
     useUnmount(() => worker.terminate());
     return worker;
 }
@@ -162,7 +167,9 @@ export interface ChartRef {
 export const Chart = forwardRef<ChartRef, ChartProps>((props, ref) => {
     const { onHover, onHoverEnd, onTouchUp, onChangeBoundsEnd, onChangeBounds } = props;
 
-    const worker = useWorker();
+    const disableWorker = Boolean(props.disableWorker)
+
+    const worker = useWorker(disableWorker);
 
     const onCanvasResize = useCallback(
         (sizeCpx: Size) => worker.postMessage(setCanvasSizeMessage(sizeCpx.width, sizeCpx.height)),
